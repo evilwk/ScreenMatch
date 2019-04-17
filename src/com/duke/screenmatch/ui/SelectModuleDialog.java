@@ -12,13 +12,13 @@ public class SelectModuleDialog extends JDialog {
     private JPanel contentPane;
     private JButton buttonOK;
     private JButton buttonCancel;
-    private JList list1;
+    private JList<String> list1;
 
     //提供一个回调
     private OnOkClickListener onOkClickListener;
 
     //对外暴漏列表对象
-    public JList getJList() {
+    JList<String> getJList() {
         return list1;
     }
 
@@ -32,14 +32,14 @@ public class SelectModuleDialog extends JDialog {
         if (dialog == null) {
             return;
         }
-        DefaultListModel listModel = new DefaultListModel();
-        JList jList = dialog.getJList();
-        ArrayList<String> moduleNamesList = Utils.getModuleNames(Utils.getBasePath(project));
-        if (moduleNamesList == null || moduleNamesList.size() <= 0) {
+        DefaultListModel<String> listModel = new DefaultListModel<>();
+        JList<String> jList = dialog.getJList();
+        ArrayList<String> moduleNames = Utils.getModuleNames(Utils.getBasePath(project));
+        if (moduleNames == null || moduleNames.size() <= 0) {
             return;
         }
-        for (String aNameArr : moduleNamesList) {
-            listModel.addElement(aNameArr);
+        for (String moduleName : moduleNames) {
+            listModel.addElement(moduleName);
         }
         jList.setModel(listModel);
     }

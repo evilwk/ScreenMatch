@@ -18,7 +18,10 @@ import com.intellij.psi.xml.XmlTag;
 
 import java.awt.*;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.List;
 import java.util.*;
 
 public class Utils {
@@ -49,8 +52,6 @@ public class Utils {
 
     /**
      * 设置对话框的位置(设置居中)
-     *
-     * @return
      */
     public static Point getDialogCenterLocation() {
         Dimension dimension = getDimension();
@@ -58,9 +59,9 @@ public class Utils {
         if (dimension == null) {
             return point;
         }
-        /**
-         * dimension.width / 4 即对话框的宽度
-         * dimension.height / 3 i对话框的高度
+        /*
+         * dimension.width / 4 对话框的宽度
+         * dimension.height / 3 对话框的高度
          */
         point.x = (dimension.width - getDialogWidth()) >> 1;
         point.y = (dimension.height - getDialogHeight()) >> 1;
@@ -68,68 +69,43 @@ public class Utils {
     }
 
     public static boolean isEmpty(String string) {
-        if (string == null || "".equals(string.trim())) {
-            return true;
-        }
-        return false;
+        return string == null || "".equals(string.trim());
     }
 
-    public static ArrayList<String> getModuleNames(String basePath) {
-        if (isEmpty(basePath)) {
-            return null;
-        }
-        ArrayList<String> names = new ArrayList<>();
-        VirtualFile baseVirtualFile = getVirtualFile(basePath);
-        if (baseVirtualFile == null) {
-            return null;
-        }
-        VirtualFile[] virtualFiles = baseVirtualFile.getChildren();
-        if (virtualFiles == null || virtualFiles.length <= 0) {
-            return null;
-        }
-        VirtualFile temp = null;
-        String markUsuallyUsed = null;
-        String defaultUsed = Settings.getDefaultModuleName();
-        for (int i = 0; i < virtualFiles.length; i++) {
-            temp = virtualFiles[i];
-            if (temp == null
-                    || !temp.isValid()
-                    || !temp.isDirectory()) {
-                continue;
+    public static final String MANIFEST_PATH = "src/main/AndroidManifest.xml";
+
+    public static void searchModules(String projectPath, String basePath, Set<String> ignoreModuleNames, List<String> modules) {
+        File baseFile = new File(basePath);
+        File[] subDirs = baseFile.listFiles(new FileFilter() {
+            @Override
+            public boolean accept(File file) {
+                return file.isDirectory();
             }
-            if (isIgnore(basePath, temp.getName())) {
-                continue;
+        });
+        if (subDirs == null || subDirs.length == 0) {
+            return;
+        }
+        for (File subDir : subDirs) {
+            // src/main/AndroidManifest.xml
+            String subDirPath = subDir.getAbsolutePath();
+            File file = Paths.get(subDirPath, MANIFEST_PATH).toFile();
+            if (file.exists()) {
+                modules.add(subDirPath
+                        .replace("\\", "/")
+                        .replace(projectPath, ""));
+            } else if (!ignoreModuleNames.contains(subDir.getName())) {
+                searchModules(projectPath, subDirPath, ignoreModuleNames, modules);
             }
-            if (!Utils.isEmpty(defaultUsed) && defaultUsed.equals(temp.getName())) {
-                markUsuallyUsed = temp.getName();
-                continue;
-            }
-            names.add(temp.getName());
         }
-        String[] nameArr = new String[names.size()];
-        for (int i = 0; i < nameArr.length; i++) {
-            nameArr[i] = names.get(i);
-        }
-        try {
-            Arrays.sort(nameArr);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        names.clear();
-        if (!Utils.isEmpty(markUsuallyUsed)) {
-            names.add(markUsuallyUsed);
-        }
-        Collections.addAll(names, nameArr);
-        return names;
     }
 
-    private static boolean isIgnore(String basePath, String targetValue) {
-        if (isEmpty(targetValue)) {
-            return true;
-        }
-        Set<String> set = new HashSet<>();
-        set.addAll(Arrays.asList(ignoreFoldersDefault));
-        String ignoreModule = Settings.get(basePath, Settings.KEY_IGNORE_MODULE_NAME);
+    public static ArrayList<String> getModuleNames(String projectPath) {
+        // 格式化分隔符
+        projectPath = projectPath.replace("\\", "/");
+
+        // 忽略的目录
+        Set<String> ignoreModuleNames = new HashSet<>(Arrays.asList(ignoreFoldersDefault));
+        String ignoreModule = Settings.get(projectPath, Settings.KEY_IGNORE_MODULE_NAME);
         if (!isEmpty(ignoreModule)) {
             ignoreModule = ignoreModule.replaceAll("，", ",")
                     .replaceAll("， ", ",")
@@ -141,20 +117,21 @@ public class Utils {
         }
         if (!isEmpty(ignoreModule)) {
             String[] readModules = ignoreModule.split(",");
-            set.addAll(Arrays.asList(readModules));
+            ignoreModuleNames.addAll(Arrays.asList(readModules));
         }
 
-        Iterator<String> iterator = set.iterator();
-        while (iterator.hasNext()) {
-            String item = iterator.next();
-            if (isEmpty(item)) {
-                continue;
-            }
-            if (targetValue.equals(item.trim())) {
-                return true;
+        ArrayList<String> moduleItems = new ArrayList<>();
+        searchModules(projectPath, projectPath, ignoreModuleNames, moduleItems);
+
+        String defaultUsed = Settings.getDefaultModuleName();
+        if (defaultUsed != null && !defaultUsed.equals("")) {
+            int index = moduleItems.indexOf(defaultUsed);
+            if (index >= 0) {
+                moduleItems.remove(index);
+                moduleItems.add(0, defaultUsed);
             }
         }
-        return false;
+        return moduleItems;
     }
 
     private void setSelectText(AnActionEvent event, String text) {
@@ -219,7 +196,7 @@ public class Utils {
         return LocalFileSystem.getInstance().findFileByPath(path);
     }
 
-    public static PsiFile getPsiFile(VirtualFile virtualFile, Project project) {
+    private static PsiFile getPsiFile(VirtualFile virtualFile, Project project) {
         if (virtualFile == null || project == null) {
             return null;
         }
@@ -236,7 +213,7 @@ public class Utils {
     /**
      * 获取res目录，包含 layout, values, drawable 或 mipmap
      *
-     * @param basePath
+     * @param basePath 工程根目录
      * @return res路径 <br/>
      * 1、module/AndroidManifest.xml <br/>
      * module/res/values <br/>
@@ -254,9 +231,7 @@ public class Utils {
         if (virtualFile == null || !virtualFile.isValid() || !virtualFile.isDirectory()) {
             targetPath = basePath + File.separator + moduleName + File.separator + "src" + File.separator + "main" + File.separator + "res" + File.separator;
             virtualFile = getVirtualFile(targetPath);
-            if (virtualFile == null || !virtualFile.isValid() || !virtualFile.isDirectory()) {
-                //returnPath = "";
-            } else {
+            if (virtualFile != null && virtualFile.isValid() && virtualFile.isDirectory()) {
                 returnPath = targetPath;
             }
         } else {
@@ -265,7 +240,7 @@ public class Utils {
         return returnPath;
     }
 
-    public static String getAndroidManifestPath(String basePath, String moduleName) {
+    private static String getAndroidManifestPath(String basePath, String moduleName) {
         if (isEmpty(basePath) || isEmpty(moduleName)) {
             return null;
         }
@@ -275,9 +250,7 @@ public class Utils {
         if (virtualFile == null || !virtualFile.isValid() || !virtualFile.isDirectory()) {
             targetPath = basePath + File.separator + moduleName + File.separator + "src" + File.separator + "main" + File.separator + "AndroidManifest.xml";
             virtualFile = getVirtualFile(targetPath);
-            if (virtualFile == null || !virtualFile.isValid() || !virtualFile.isDirectory()) {
-                //returnPath = "";
-            } else {
+            if (virtualFile != null && virtualFile.isValid() && virtualFile.isDirectory()) {
                 returnPath = targetPath;
             }
         } else {
