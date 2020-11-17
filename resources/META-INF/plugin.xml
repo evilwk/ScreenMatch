@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.duke.screenmatch</id>
     <name>ScreenMatch</name>
-    <version>3.0</version>
+    <version>3.1</version>
     <vendor email="136239173@qq.com" url="http://blog.csdn.net/fesdgasdgasdg?viewmode=contents">Author - duke</vendor>
 
     <description><![CDATA[
@@ -44,6 +44,8 @@
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/build_number_ranges.html for description -->
     <!-- Default value is 145.0 -->
     <idea-version since-build="107.121"/>
+    <depends>com.intellij.modules.java</depends>
+    <depends>com.intellij.modules.platform</depends>
 
     <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
          on how to target different products -->
